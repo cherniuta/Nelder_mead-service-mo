@@ -2,10 +2,13 @@
 #include <vector>
 #include <cmath>
 #include <algorithm>
+#include <cstring>
 
 struct Vertex {
     std::vector<double> x;
     double value;
+
+    Vertex(int n) : x(n), value(0.0) {}
 };
 
 NelderMeadParams create_default_params() {
@@ -19,59 +22,82 @@ NelderMeadParams create_default_params() {
     return p;
 }
 
+std::vector<Vertex> create_initial_simplex(const double* x0, int n, double step_size,
+                                           ObjectiveFunction f, void* context) {
+    std::vector<Vertex> simplex;
+    simplex.reserve(n + 1);
+
+    Vertex v0(n);
+    std::copy(x0, x0 + n, v0.x.begin());
+    v0.value = f(v0.x.data(), n, context);
+    simplex.push_back(v0);
+
+    for (int i = 0; i < n; ++i) {
+        Vertex v(n);
+        std::copy(x0, x0 + n, v.x.begin());
+        v.x[i] += step_size;
+        v.value = f(v.x.data(), n, context);
+        simplex.push_back(v);
+    }
+
+    return simplex;
+}
+
+std::vector<double> compute_centroid(const std::vector<Vertex>& vertices, int n, int exclude_idx) {
+    std::vector<double> centroid(n, 0.0);
+    for (int i = 0; i < vertices.size(); ++i) {
+        if (i == exclude_idx) continue;
+        for (int j = 0; j < n; ++j) {
+            centroid[j] += vertices[i].x[j];
+        }
+    }
+    for (int j = 0; j < n; ++j) {
+        centroid[j] /= (vertices.size() - 1);
+    }
+    return centroid;
+}
+
+Vertex reflect_point(const std::vector<double>& centroid, const Vertex& worst,
+                     double alpha, int n, ObjectiveFunction f, void* context) {
+    Vertex reflected(n);
+    for (int i = 0; i < n; ++i) {
+        reflected.x[i] = centroid[i] + alpha * (centroid[i] - worst.x[i]);
+    }
+    reflected.value = f(reflected.x.data(), n, context);
+    return reflected;
+}
+
 int nelder_mead_optimize(ObjectiveFunction f, double* x, int n,
                          const NelderMeadParams* params, void* context,
                          double* final_value) {
-    if (!x || n <= 0 || !params) return -1;
+    if (!x || !params || n <= 0) return -1;
 
-    std::vector<Vertex> simplex(n + 1);
-    double step = 0.1;
-
-    // построим симплекс вручную
-    for (int i = 0; i <= n; ++i) {
-        simplex[i].x.resize(n);
-        for (int j = 0; j < n; ++j) {
-            simplex[i].x[j] = x[j];
-            if (i > 0 && j == i - 1)
-                simplex[i].x[j] += step;
-        }
-        simplex[i].value = f(simplex[i].x.data(), n, context);
-    }
+    auto simplex = create_initial_simplex(x, n, 0.1, f, context);
 
     for (int iter = 0; iter < params->max_iter; ++iter) {
-        std::sort(simplex.begin(), simplex.end(), [](const Vertex& a, const Vertex& b) {
-            return a.value < b.value;
-        });
+        std::sort(simplex.begin(), simplex.end(),
+                  [](const Vertex& a, const Vertex& b) { return a.value < b.value; });
 
-        std::vector<double> centroid(n, 0.0);
-        for (int i = 0; i < n; ++i)
-            for (int j = 0; j < n; ++j)
-                centroid[j] += simplex[i].x[j];
-        for (int j = 0; j < n; ++j)
-            centroid[j] /= n;
+        auto centroid = compute_centroid(simplex, n, n);
+        Vertex reflected = reflect_point(centroid, simplex[n], params->alpha, n, f, context);
 
-        // отражение
-        std::vector<double> reflected(n);
-        for (int i = 0; i < n; ++i)
-            reflected[i] = centroid[i] + params->alpha * (centroid[i] - simplex[n].x[i]);
-        double reflected_val = f(reflected.data(), n, context);
-
-        if (reflected_val < simplex[0].value) {
-            // расширение
+        if (reflected.value < simplex[0].value) {
+            // расширение пока не вынесена
             std::vector<double> expanded(n);
             for (int i = 0; i < n; ++i)
-                expanded[i] = centroid[i] + params->gamma * (reflected[i] - centroid[i]);
+                expanded[i] = centroid[i] + params->gamma * (reflected.x[i] - centroid[i]);
             double expanded_val = f(expanded.data(), n, context);
 
-            simplex[n].x = (expanded_val < reflected_val) ? expanded : reflected;
-            simplex[n].value = std::min(expanded_val, reflected_val);
-        }
-        else if (reflected_val < simplex[n - 1].value) {
-            simplex[n].x = reflected;
-            simplex[n].value = reflected_val;
-        }
-        else {
-            // сжатие
+            if (expanded_val < reflected.value) {
+                simplex[n].x = expanded;
+                simplex[n].value = expanded_val;
+            } else {
+                simplex[n] = reflected;
+            }
+        } else if (reflected.value < simplex[n - 1].value) {
+            simplex[n] = reflected;
+        } else {
+            // сжатие и усадка пока остались как раньше
             std::vector<double> contracted(n);
             for (int i = 0; i < n; ++i)
                 contracted[i] = centroid[i] + params->beta * (simplex[n].x[i] - centroid[i]);
@@ -81,10 +107,10 @@ int nelder_mead_optimize(ObjectiveFunction f, double* x, int n,
                 simplex[n].x = contracted;
                 simplex[n].value = contracted_val;
             } else {
-                // усадка
                 for (int i = 1; i <= n; ++i) {
-                    for (int j = 0; j < n; ++j)
+                    for (int j = 0; j < n; ++j) {
                         simplex[i].x[j] = simplex[0].x[j] + params->delta * (simplex[i].x[j] - simplex[0].x[j]);
+                    }
                     simplex[i].value = f(simplex[i].x.data(), n, context);
                 }
             }
@@ -93,15 +119,11 @@ int nelder_mead_optimize(ObjectiveFunction f, double* x, int n,
         double max_diff = 0.0;
         for (int i = 1; i <= n; ++i)
             max_diff = std::max(max_diff, std::abs(simplex[i].value - simplex[0].value));
-
-        if (max_diff < params->tolerance)
-            break;
+        if (max_diff < params->tolerance) break;
     }
 
-    for (int i = 0; i < n; ++i)
-        x[i] = simplex[0].x[i];
-    if (final_value)
-        *final_value = simplex[0].value;
+    std::copy(simplex[0].x.begin(), simplex[0].x.end(), x);
+    if (final_value) *final_value = simplex[0].value;
 
     return 0;
 }
