@@ -67,6 +67,37 @@ Vertex reflect_point(const std::vector<double>& centroid, const Vertex& worst,
     return reflected;
 }
 
+Vertex expand_point(const std::vector<double>& centroid, const Vertex& reflected,
+                    double gamma, int n, ObjectiveFunction f, void* context) {
+    Vertex expanded(n);
+    for (int i = 0; i < n; ++i) {
+        expanded.x[i] = centroid[i] + gamma * (reflected.x[i] - centroid[i]);
+    }
+    expanded.value = f(expanded.x.data(), n, context);
+    return expanded;
+}
+
+Vertex contract_point(const std::vector<double>& centroid, const Vertex& target,
+                      double beta, int n, ObjectiveFunction f, void* context) {
+    Vertex contracted(n);
+    for (int i = 0; i < n; ++i) {
+        contracted.x[i] = centroid[i] + beta * (target.x[i] - centroid[i]);
+    }
+    contracted.value = f(contracted.x.data(), n, context);
+    return contracted;
+}
+
+void shrink_simplex(std::vector<Vertex>& simplex, double delta,
+                    ObjectiveFunction f, void* context) {
+    const Vertex& best = simplex[0];
+    for (size_t i = 1; i < simplex.size(); ++i) {
+        for (size_t j = 0; j < simplex[i].x.size(); ++j) {
+            simplex[i].x[j] = best.x[j] + delta * (simplex[i].x[j] - best.x[j]);
+        }
+        simplex[i].value = f(simplex[i].x.data(), simplex[i].x.size(), context);
+    }
+}
+
 int nelder_mead_optimize(ObjectiveFunction f, double* x, int n,
                          const NelderMeadParams* params, void* context,
                          double* final_value) {
@@ -82,37 +113,28 @@ int nelder_mead_optimize(ObjectiveFunction f, double* x, int n,
         Vertex reflected = reflect_point(centroid, simplex[n], params->alpha, n, f, context);
 
         if (reflected.value < simplex[0].value) {
-            // расширение пока не вынесена
-            std::vector<double> expanded(n);
-            for (int i = 0; i < n; ++i)
-                expanded[i] = centroid[i] + params->gamma * (reflected.x[i] - centroid[i]);
-            double expanded_val = f(expanded.data(), n, context);
-
-            if (expanded_val < reflected.value) {
-                simplex[n].x = expanded;
-                simplex[n].value = expanded_val;
-            } else {
-                simplex[n] = reflected;
-            }
+            Vertex expanded = expand_point(centroid, reflected, params->gamma, n, f, context);
+            simplex[n] = (expanded.value < reflected.value) ? expanded : reflected;
         } else if (reflected.value < simplex[n - 1].value) {
             simplex[n] = reflected;
         } else {
-            // сжатие и усадка пока остались как раньше
-            std::vector<double> contracted(n);
-            for (int i = 0; i < n; ++i)
-                contracted[i] = centroid[i] + params->beta * (simplex[n].x[i] - centroid[i]);
-            double contracted_val = f(contracted.data(), n, context);
-
-            if (contracted_val < simplex[n].value) {
-                simplex[n].x = contracted;
-                simplex[n].value = contracted_val;
-            } else {
-                for (int i = 1; i <= n; ++i) {
-                    for (int j = 0; j < n; ++j) {
-                        simplex[i].x[j] = simplex[0].x[j] + params->delta * (simplex[i].x[j] - simplex[0].x[j]);
-                    }
-                    simplex[i].value = f(simplex[i].x.data(), n, context);
+            bool shrink = true;
+            if (reflected.value < simplex[n].value) {
+                Vertex contracted = contract_point(centroid, reflected, params->beta, n, f, context);
+                if (contracted.value < reflected.value) {
+                    simplex[n] = contracted;
+                    shrink = false;
                 }
+            } else {
+                Vertex contracted = contract_point(centroid, simplex[n], params->beta, n, f, context);
+                if (contracted.value < simplex[n].value) {
+                    simplex[n] = contracted;
+                    shrink = false;
+                }
+            }
+
+            if (shrink) {
+                shrink_simplex(simplex, params->delta, f, context);
             }
         }
 
