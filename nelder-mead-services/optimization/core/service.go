@@ -257,7 +257,7 @@ func (s *Service) Optimization(ctx context.Context, query OptimizationQuery) (Op
 		&finalValue,
 	)
 	if result != 0 {
-		return OptimizationReplay{}, fmt.Errorf("optimization failed")
+		return OptimizationReplay{}, ErrOptimizationFailed
 	}
 
 	// Преобразование результатов

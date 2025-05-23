@@ -8,7 +8,7 @@ import (
 
 type Config struct {
 	LogLevel            string        `yaml:"log_level" env:"LOG_LEVEL" env-default:"DEBUG"`
-	Address             string        `yaml:"search_address" env:"SEARCH_ADDRESS" env-default:"localhost:80"`
+	Address             string        `yaml:"api_address" env:"API_ADDRESS" env-default:"localhost:80"`
 	Timeout             time.Duration `yaml:"timeout" env:"API_TIMEOUT" env-default:"5s"`
 	OptimizationAddress string        `yaml:"optimization_address" env:"OPTIMIZATION_ADDRESS" env-default:"localhost:81"`
 }

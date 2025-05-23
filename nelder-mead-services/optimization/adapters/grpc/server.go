@@ -4,6 +4,9 @@ import (
 	"awesomeProject2/optimization/core"
 	__ "awesomeProject2/proto/optimizator"
 	"context"
+	"errors"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/emptypb"
 )
 
@@ -29,6 +32,9 @@ func (s *Server) Optimization(ctx context.Context, request *__.OptimizationReque
 
 	result, err := s.service.Optimization(ctx, query)
 	if err != nil {
+		if errors.Is(err, core.ErrOptimizationFailed) {
+			return nil, status.Error(codes.OutOfRange, "It is impossible to find the optimum")
+		}
 		return nil, err
 	}
 

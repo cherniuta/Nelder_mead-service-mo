@@ -7,7 +7,7 @@ import (
 
 type Config struct {
 	LogLevel string `yaml:"log_level" env:"LOG_LEVEL" env-default:"DEBUG"`
-	Address  string `yaml:"search_address" env:"SEARCH_ADDRESS" env-default:"localhost:81"`
+	Address  string `yaml:"address" env:"ADDRESS" env-default:"localhost:81"`
 }
 
 func MustLoad(configPath string) Config {

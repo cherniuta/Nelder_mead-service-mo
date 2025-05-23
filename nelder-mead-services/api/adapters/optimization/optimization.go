@@ -43,5 +43,4 @@ func (c Client) Optimization(ctx context.Context, function string, tolerance flo
 	}
 
 	return core.OptimizationReplay{Variable: variable, FunctionValue: reply.GetFunctionValue()}, nil
-
 }

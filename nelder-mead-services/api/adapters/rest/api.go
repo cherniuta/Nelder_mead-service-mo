@@ -3,6 +3,7 @@ package rest
 import (
 	"awesomeProject2/api/core"
 	"encoding/json"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"strconv"
@@ -44,85 +45,88 @@ type Variable struct {
 }
 type OptimizationResponse struct {
 	Variable      []Variable `json:"variable"`
-	FunctionValue float64    `json:"functionValue"`
+	FunctionValue float64    `json:"function_value"`
 }
 
 func NewOptimizationHandler(log *slog.Logger, optimizator core.Optimizator) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		var (
-			tolerance float64
-			maxIter   int
-			err       error
-		)
 		functionStr := r.URL.Query().Get("function")
-		if functionStr != "" {
-			toleranceStr := r.URL.Query().Get("tolerance")
-			if toleranceStr != "" {
-				tolerance, err = strconv.ParseFloat(toleranceStr, 64)
-				if err != nil {
-					log.Error("wrong tolerance", "value", toleranceStr)
-					http.Error(w, "bad tolerance", http.StatusBadRequest)
-					return
-				}
-				if tolerance < 0 {
-					log.Error("wrong tolerance", "value", toleranceStr)
-					http.Error(w, "bad tolerance", http.StatusBadRequest)
-					return
-				}
-				maxIterStr := r.URL.Query().Get("iter")
-				if maxIterStr != "" {
-					maxIter, err = strconv.Atoi(maxIterStr)
-					if err != nil {
-						log.Error("wrong iter", "value", maxIterStr)
-						http.Error(w, "bad iter", http.StatusBadRequest)
-						return
-					}
-					if tolerance < 0 {
-						log.Error("wrong iter", "value", maxIterStr)
-						http.Error(w, "bad iter", http.StatusBadRequest)
-						return
-					}
-				} else {
-					log.Error("wrong iter", "value", maxIterStr)
-					http.Error(w, "bad iter", http.StatusBadRequest)
-					return
-				}
-
-			} else {
-				log.Error("wrong tolerance", "value", toleranceStr)
-				http.Error(w, "bad tolerance", http.StatusBadRequest)
-				return
-			}
-
-		} else {
-			log.Error("wrong function", "value", functionStr)
-			http.Error(w, "bad function", http.StatusBadRequest)
+		if functionStr == "" {
+			log.Error("missing function parameter")
+			http.Error(w, "function parameter is required", http.StatusBadRequest)
 			return
+		}
 
+		tolerance, err := parsePositiveFloatParam(r, "tolerance")
+		if err != nil {
+			log.Error("invalid tolerance", "error", err)
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+
+		maxIter, err := parsePositiveIntParam(r, "iter")
+		if err != nil {
+			log.Error("invalid iter", "error", err)
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
 		}
 
 		reply, err := optimizator.Optimization(r.Context(), functionStr, tolerance, maxIter)
 		if err != nil {
-			log.Error("problems with optimizing the function", "error", err)
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			log.Error("optimization failed", "error", err)
+			http.Error(w, "optimization failed", http.StatusInternalServerError)
 			return
-
 		}
+
 		response := OptimizationResponse{
-			Variable:      make([]Variable, 0),
+			Variable:      make([]Variable, len(reply.Variable)),
 			FunctionValue: reply.FunctionValue,
 		}
 
-		for _, item := range reply.Variable {
-			response.Variable = append(response.Variable, Variable{Name: item.Name, Value: item.Value})
+		for i, item := range reply.Variable {
+			response.Variable[i] = Variable{Name: item.Name, Value: item.Value}
 		}
 
 		w.Header().Set("Content-Type", "application/json")
 		if err := json.NewEncoder(w).Encode(response); err != nil {
-			log.Error("cannot encode reply", "error", err)
+			log.Error("failed to encode response", "error", err)
 			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-			return
 		}
-
 	}
+}
+
+func parsePositiveFloatParam(r *http.Request, param string) (float64, error) {
+	valueStr := r.URL.Query().Get(param)
+	if valueStr == "" {
+		return 0, fmt.Errorf("%s parameter is required", param)
+	}
+
+	value, err := strconv.ParseFloat(valueStr, 64)
+	if err != nil {
+		return 0, fmt.Errorf("invalid %s value", param)
+	}
+
+	if value < 0 {
+		return 0, fmt.Errorf("%s must be positive", param)
+	}
+
+	return value, nil
+}
+
+func parsePositiveIntParam(r *http.Request, param string) (int, error) {
+	valueStr := r.URL.Query().Get(param)
+	if valueStr == "" {
+		return 0, fmt.Errorf("%s parameter is required", param)
+	}
+
+	value, err := strconv.Atoi(valueStr)
+	if err != nil {
+		return 0, fmt.Errorf("invalid %s value", param)
+	}
+
+	if value < 0 {
+		return 0, fmt.Errorf("%s must be positive", param)
+	}
+
+	return value, nil
 }

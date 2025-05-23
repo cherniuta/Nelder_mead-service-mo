@@ -1,0 +1,49 @@
+services:
+
+  telegram:
+    image: telergam:latest
+    build:
+      context: nelder-mead-services
+      dockerfile: nelder-mead-services/Dockerfile.telegram
+    container_name: telegram
+    restart: unless-stopped
+    ports:
+      - 28085:8080
+    volumes:
+      - ./nelder-mead-services/telegram/config.yaml:/config.yaml
+    environment:
+      - TG_TOKEN=7743368475:AAE-Sf6OA9SOnzSqnKw27Vz6AziiKCILFlQ
+      - API_CLIENT=api:8080
+    depends_on:
+      api:
+        condition: service_started
+  api:
+    image: api:latest
+    build:
+      context: nelder-mead-services
+      dockerfile: nelder-mead-services/Dockerfile.api
+    container_name: api
+    restart: unless-stopped
+    ports:
+      - 28080:8080
+    volumes:
+      - ./nelder-mead-services/api/config.yaml:/config.yaml
+    environment:
+      - API_ADDRESS=:8080
+      - OPTIMIZATION_ADDRESS=:8081
+    depends_on:
+      - optimization
+
+  optimization:
+    image: optimization:latest
+    build:
+      context: nelder-mead-services
+      dockerfile: nelder-mead-services/Dockerfile.optimization
+    container_name: optimization
+    restart: unless-stopped
+    ports:
+      - 28081:8080
+    volumes:
+      - ./nelder-mead-services/optimization/config.yaml:/config.yaml
+    environment:
+      - ADDRESS=:8081
