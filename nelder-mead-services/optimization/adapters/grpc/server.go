@@ -21,11 +21,27 @@ func (s *Server) Ping(_ context.Context, _ *emptypb.Empty) (*emptypb.Empty, erro
 }
 
 func (s *Server) Optimization(ctx context.Context, request *__.OptimizationRequest) (*__.OptimizationReply, error) {
-	query, err := s.service.Optimization(ctx, core.OptimizationQuery{Function: request.Function, Tolerance: request.Tolerance, MaxIter: request.MaxIter})
+	query := core.OptimizationQuery{
+		Function:  request.GetFunction(),
+		Tolerance: request.GetTolerance(),
+		MaxIter:   request.GetMaxIter(),
+	}
 
+	result, err := s.service.Optimization(ctx, query)
 	if err != nil {
 		return nil, err
 	}
 
-	return &__.OptimizationReply{Variable: query.Variable, FunctionValue: query.FunctionValue}, nil
+	var variables []*__.Variable
+	for _, v := range result.Variable {
+		variables = append(variables, &__.Variable{
+			Name:  v.Name,
+			Value: v.Value,
+		})
+	}
+
+	return &__.OptimizationReply{
+		Variable:      variables,
+		FunctionValue: result.FunctionValue,
+	}, nil
 }

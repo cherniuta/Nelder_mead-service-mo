@@ -10,6 +10,7 @@ package core
 extern double goObjectiveFunction(double* x, int n, void* context);
 */
 import "C"
+
 import (
 	"context"
 	"fmt"
@@ -222,32 +223,31 @@ func toFloat64Slice(x []C.double) []float64 {
 }
 
 func (s *Service) Optimization(ctx context.Context, query OptimizationQuery) (OptimizationReplay, error) {
-
 	f, err := parseFunction(query.Function)
 	if err != nil {
 		fmt.Printf("Error parsing function: %v\n", err)
 		return OptimizationReplay{}, err
 	}
 
-	// Устанавливаем текущую функцию
 	currentFunction = f
 
-	// Создаем параметры метода с значениями по умолчанию
+	// Создаем параметры метода
 	params := C.create_default_params()
-	params.tolerance = query.Tolerance // Увеличиваем точность
-	params.max_iter = query.MaxIter    // Увеличиваем максимальное число итераций
 
-	// Задаем начальную точку
+	// Явное преобразование типов
+	params.tolerance = C.double(query.Tolerance) // float64 -> C.double
+	params.max_iter = C.int(query.MaxIter)       // int64 -> C.int
+
+	// Начальная точка
 	n := f.Dimension()
 	x := make([]C.double, n)
 	for i := range x {
-		x[i] = 1.0 // начальное приближение
+		x[i] = 1.0
 	}
 
-	// Переменная для хранения итогового значения функции
 	var finalValue C.double
 
-	// Вызываем оптимизацию
+	// Вызов оптимизации
 	result := C.nelder_mead_optimize(
 		(C.ObjectiveFunction)(unsafe.Pointer(C.goObjectiveFunction)),
 		(*C.double)(&x[0]),
@@ -257,14 +257,20 @@ func (s *Service) Optimization(ctx context.Context, query OptimizationQuery) (Op
 		&finalValue,
 	)
 	if result != 0 {
-		return OptimizationReplay{}, err
+		return OptimizationReplay{}, fmt.Errorf("optimization failed")
 	}
 
+	// Преобразование результатов
 	variables := make([]Variable, 0, f.Dimension())
 	for i, val := range x {
-		variables = append(variables, Variable{Name: f.VarNames()[i], Value: val})
+		variables = append(variables, Variable{
+			Name:  f.VarNames()[i],
+			Value: int64(val), // C.double -> int64
+		})
 	}
 
-	return OptimizationReplay{Variable: variables, FunctionValue: finalValue}, nil
-
+	return OptimizationReplay{
+		Variable:      variables,
+		FunctionValue: float64(finalValue), // C.double -> float64
+	}, nil
 }
