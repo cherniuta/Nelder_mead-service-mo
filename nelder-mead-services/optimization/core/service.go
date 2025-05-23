@@ -31,14 +31,12 @@ func NewService(log *slog.Logger) (*Service, error) {
 		log: log}, nil
 }
 
-// Интерфейс для функции оптимизации
 type OptimizationFunction interface {
 	Evaluate(vars []float64) float64
 	Dimension() int
 	VarNames() []string
 }
 
-// Структура для хранения разобранной функции
 type ParsedFunction struct {
 	expression string
 	variables  []string
@@ -47,7 +45,6 @@ type ParsedFunction struct {
 }
 
 func (f *ParsedFunction) Evaluate(vars []float64) float64 {
-	// Создаем карту значений переменных
 	values := make(map[string]float64)
 	for i, name := range f.variables {
 		values[name] = vars[i]
@@ -63,35 +60,27 @@ func (f *ParsedFunction) VarNames() []string {
 	return f.variables
 }
 
-// Глобальная переменная для хранения текущей функции
 var currentFunction OptimizationFunction
 
 //export goObjectiveFunction
 func goObjectiveFunction(x *C.double, n C.int, context unsafe.Pointer) C.double {
-	// Преобразуем C-массив в срез Go для удобства
 	slice := unsafe.Slice(x, int(n))
 
-	// Конвертируем в []float64
 	vars := make([]float64, len(slice))
 	for i, v := range slice {
 		vars[i] = float64(v)
 	}
 
-	// Вычисляем значение функции
 	result := currentFunction.Evaluate(vars)
 	return C.double(result)
 }
 
-// Парсер математического выражения
 func parseFunction(expr string) (*ParsedFunction, error) {
-	// Очищаем пробелы и приводим к нижнему регистру
 	expr = strings.ToLower(strings.ReplaceAll(expr, " ", ""))
 
-	// Находим все переменные (x1, x2, ..., xn)
 	varRegex := regexp.MustCompile(`x\d+`)
 	vars := varRegex.FindAllString(expr, -1)
 
-	// Удаляем дубликаты и сортируем переменные
 	uniqueVars := make(map[string]bool)
 	var variables []string
 	for _, v := range vars {
@@ -101,7 +90,6 @@ func parseFunction(expr string) (*ParsedFunction, error) {
 		}
 	}
 
-	// Токенизация выражения
 	tokens := tokenizeExpression(expr)
 
 	return &ParsedFunction{
@@ -112,19 +100,14 @@ func parseFunction(expr string) (*ParsedFunction, error) {
 	}, nil
 }
 
-// Токенизация выражения
 func tokenizeExpression(expr string) []string {
-	// Добавляем пробелы вокруг операторов для упрощения разбора
 	expr = regexp.MustCompile(`([\+\-\*\/\(\)\^])`).ReplaceAllString(expr, " $1 ")
 	return strings.Fields(expr)
 }
 
-// Вычисление значения выражения
 func evaluateExpression(tokens []string, values map[string]float64) float64 {
-	// Преобразуем инфиксную запись в постфиксную
 	postfix := infixToPostfix(tokens)
 
-	// Вычисляем результат
 	var stack []float64
 
 	for _, token := range postfix {
@@ -150,11 +133,9 @@ func evaluateExpression(tokens []string, values map[string]float64) float64 {
 			}
 			stack = append(stack, result)
 		default:
-			// Проверяем, является ли токен переменной
 			if val, ok := values[token]; ok {
 				stack = append(stack, val)
 			} else {
-				// Пробуем преобразовать в число
 				if num, err := strconv.ParseFloat(token, 64); err == nil {
 					stack = append(stack, num)
 				}
@@ -168,7 +149,6 @@ func evaluateExpression(tokens []string, values map[string]float64) float64 {
 	return 0
 }
 
-// Преобразование инфиксной записи в постфиксную (алгоритм сортировочной станции)
 func infixToPostfix(tokens []string) []string {
 	precedence := map[string]int{
 		"+": 1,
@@ -205,7 +185,6 @@ func infixToPostfix(tokens []string) []string {
 		}
 	}
 
-	// Добавляем оставшиеся операторы из стека
 	for len(stack) > 0 {
 		output = append(output, stack[len(stack)-1])
 		stack = stack[:len(stack)-1]
@@ -231,14 +210,11 @@ func (s *Service) Optimization(ctx context.Context, query OptimizationQuery) (Op
 
 	currentFunction = f
 
-	// Создаем параметры метода
 	params := C.create_default_params()
 
-	// Явное преобразование типов
-	params.tolerance = C.double(query.Tolerance) // float64 -> C.double
-	params.max_iter = C.int(query.MaxIter)       // int64 -> C.int
+	params.tolerance = C.double(query.Tolerance)
+	params.max_iter = C.int(query.MaxIter)
 
-	// Начальная точка
 	n := f.Dimension()
 	x := make([]C.double, n)
 	for i := range x {
@@ -247,7 +223,6 @@ func (s *Service) Optimization(ctx context.Context, query OptimizationQuery) (Op
 
 	var finalValue C.double
 
-	// Вызов оптимизации
 	result := C.nelder_mead_optimize(
 		(C.ObjectiveFunction)(unsafe.Pointer(C.goObjectiveFunction)),
 		(*C.double)(&x[0]),
@@ -260,17 +235,16 @@ func (s *Service) Optimization(ctx context.Context, query OptimizationQuery) (Op
 		return OptimizationReplay{}, ErrOptimizationFailed
 	}
 
-	// Преобразование результатов
 	variables := make([]Variable, 0, f.Dimension())
 	for i, val := range x {
 		variables = append(variables, Variable{
 			Name:  f.VarNames()[i],
-			Value: int64(val), // C.double -> int64
+			Value: int64(val),
 		})
 	}
 
 	return OptimizationReplay{
 		Variable:      variables,
-		FunctionValue: float64(finalValue), // C.double -> float64
+		FunctionValue: float64(finalValue),
 	}, nil
 }

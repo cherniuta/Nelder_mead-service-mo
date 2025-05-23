@@ -5,10 +5,9 @@
 extern "C" {
 #endif
 
-// Тип функции для оптимизации
+
 typedef double (*ObjectiveFunction)(double* x, int n, void* context);
 
-// Параметры метода
 typedef struct {
     double tolerance;      // Точность для критерия остановки
     int max_iter;         // Максимальное число итераций
@@ -18,11 +17,10 @@ typedef struct {
     double sigma;        // Коэффициент глобального сжатия (обычно 0.5)
 } OptimizationParams;
 
-// Создание параметров по умолчанию
+
 OptimizationParams create_default_params(void);
 
-// Основная функция оптимизации
-// Возвращает 0 при успехе, не 0 при ошибке
+
 int nelder_mead_optimize(
     ObjectiveFunction f,      // Целевая функция
     double* x,               // Начальное приближение (будет содержать результат)

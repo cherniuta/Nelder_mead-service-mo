@@ -4,7 +4,6 @@
 #include <cmath>
 #include <cstring>
 
-// Создание параметров по умолчанию
 OptimizationParams create_default_params(void) {
     OptimizationParams params;
     params.tolerance = 1e-6;
@@ -16,10 +15,10 @@ OptimizationParams create_default_params(void) {
     return params;
 }
 
-// Вспомогательная структура для хранения вершины симплекса
+
 struct Vertex {
-    std::vector<double> x;  // координаты точки
-    double value;           // значение функции
+    std::vector<double> x;
+    double value;
 
     Vertex(int n) : x(n) {}
     
@@ -28,16 +27,15 @@ struct Vertex {
     }
 };
 
-// Создание начального симплекса
+
 std::vector<Vertex> create_initial_simplex(ObjectiveFunction f, const double* x0, int n, void* context) {
     std::vector<Vertex> vertices;
     
-    // Первая вершина - начальная точка
+
     vertices.push_back(Vertex(n));
     std::copy(x0, x0 + n, vertices[0].x.begin());
     vertices[0].value = f(vertices[0].x.data(), n, context);
-    
-    // Остальные вершины получаем смещением по каждой координате
+
     for (int i = 0; i < n; ++i) {
         vertices.push_back(Vertex(n));
         std::copy(x0, x0 + n, vertices[i + 1].x.begin());
@@ -54,10 +52,9 @@ std::vector<Vertex> create_initial_simplex(ObjectiveFunction f, const double* x0
     return vertices;
 }
 
-// Вычисление центроида всех точек кроме худшей
 std::vector<double> compute_centroid(const std::vector<Vertex>& vertices, int n) {
     std::vector<double> centroid(n, 0.0);
-    int num_points = vertices.size() - 1;  // исключаем худшую точку
+    int num_points = vertices.size() - 1;
     
     for (int i = 0; i < num_points; ++i) {
         for (int j = 0; j < n; ++j) {
@@ -72,7 +69,6 @@ std::vector<double> compute_centroid(const std::vector<Vertex>& vertices, int n)
     return centroid;
 }
 
-// Отражение точки относительно центроида
 Vertex reflect_point(const std::vector<double>& centroid, const Vertex& worst, double alpha, int n) {
     Vertex reflected(n);
     for (int i = 0; i < n; ++i) {
@@ -81,7 +77,7 @@ Vertex reflect_point(const std::vector<double>& centroid, const Vertex& worst, d
     return reflected;
 }
 
-// Растяжение точки
+
 Vertex expand_point(const std::vector<double>& centroid, const Vertex& reflected, double gamma, int n) {
     Vertex expanded(n);
     for (int i = 0; i < n; ++i) {
@@ -90,7 +86,6 @@ Vertex expand_point(const std::vector<double>& centroid, const Vertex& reflected
     return expanded;
 }
 
-// Сжатие точки
 Vertex contract_point(const std::vector<double>& centroid, const Vertex& worst, double rho, int n) {
     Vertex contracted(n);
     for (int i = 0; i < n; ++i) {
@@ -99,7 +94,6 @@ Vertex contract_point(const std::vector<double>& centroid, const Vertex& worst, 
     return contracted;
 }
 
-// Глобальное сжатие симплекса к лучшей точке
 void shrink_simplex(std::vector<Vertex>& vertices, double sigma, int n) {
     for (size_t i = 1; i < vertices.size(); ++i) {
         for (int j = 0; j < n; ++j) {
@@ -108,7 +102,6 @@ void shrink_simplex(std::vector<Vertex>& vertices, double sigma, int n) {
     }
 }
 
-// Проверка критерия остановки
 bool check_convergence(const std::vector<Vertex>& vertices, double tolerance) {
     double mean = 0.0;
     for (const auto& vertex : vertices) {
@@ -126,7 +119,6 @@ bool check_convergence(const std::vector<Vertex>& vertices, double tolerance) {
     return std::sqrt(variance) < tolerance;
 }
 
-// Основная функция оптимизации
 int nelder_mead_optimize(
     ObjectiveFunction f,
     double* x,
@@ -136,28 +128,23 @@ int nelder_mead_optimize(
     double* final_value
 ) {
     if (!x || !params || n <= 0) return -1;
-    
-    // Создаем начальный симплекс
+
     auto vertices = create_initial_simplex(f, x, n, context);
     
     for (int iter = 0; iter < params->max_iter; ++iter) {
-        // Сортируем вершины по значению функции
         std::sort(vertices.begin(), vertices.end());
-        
-        // Проверяем критерий остановки
+
         if (check_convergence(vertices, params->tolerance)) {
             break;
         }
-        
-        // Вычисляем центроид всех точек кроме худшей
+
         auto centroid = compute_centroid(vertices, n);
-        
-        // Отражение
+
         auto reflected = reflect_point(centroid, vertices.back(), params->alpha, n);
         reflected.value = f(reflected.x.data(), n, context);
         
         if (reflected.value < vertices[0].value) {
-            // Пробуем растяжение
+
             auto expanded = expand_point(centroid, reflected, params->gamma, n);
             expanded.value = f(expanded.x.data(), n, context);
             
@@ -168,15 +155,15 @@ int nelder_mead_optimize(
             }
         }
         else if (reflected.value < vertices[vertices.size()-2].value) {
-            // Отражение лучше предпоследней точки
+
             vertices.back() = reflected;
         }
         else {
-            // Пробуем сжатие
+
             bool do_shrink = true;
             
             if (reflected.value < vertices.back().value) {
-                // Внешнее сжатие
+
                 auto contracted = contract_point(centroid, reflected, params->rho, n);
                 contracted.value = f(contracted.x.data(), n, context);
                 
@@ -186,7 +173,6 @@ int nelder_mead_optimize(
                 }
             }
             else {
-                // Внутреннее сжатие
                 auto contracted = contract_point(centroid, vertices.back(), params->rho, n);
                 contracted.value = f(contracted.x.data(), n, context);
                 
@@ -197,7 +183,6 @@ int nelder_mead_optimize(
             }
             
             if (do_shrink) {
-                // Глобальное сжатие
                 shrink_simplex(vertices, params->sigma, n);
                 for (size_t i = 1; i < vertices.size(); ++i) {
                     vertices[i].value = f(vertices[i].x.data(), n, context);
@@ -206,7 +191,7 @@ int nelder_mead_optimize(
         }
     }
     
-    // Копируем лучшее решение
+
     std::sort(vertices.begin(), vertices.end());
     std::copy(vertices[0].x.begin(), vertices[0].x.end(), x);
     if (final_value) *final_value = vertices[0].value;
