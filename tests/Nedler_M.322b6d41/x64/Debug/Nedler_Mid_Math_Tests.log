@@ -1,0 +1,22 @@
+﻿  test.cpp
+C:\Users\adsim\for work and studing\projects\Nedler_Mid_Math_Tests\test.cpp(79,22): error C3646: params: неизвестный спецификатор переопределения
+  (компиляция исходного файла "/test.cpp")
+  
+C:\Users\adsim\for work and studing\projects\Nedler_Mid_Math_Tests\test.cpp(79,5): error C4430: отсутствует спецификатор типа - предполагается int. Примечание. C++ не поддерживает int по умолчанию
+  (компиляция исходного файла "/test.cpp")
+  
+C:\Users\adsim\for work and studing\projects\Nedler_Mid_Math_Tests\test.cpp(20,9): error C2065: params: необъявленный идентификатор
+  (компиляция исходного файла "/test.cpp")
+  
+C:\Users\adsim\for work and studing\projects\Nedler_Mid_Math_Tests\test.cpp(20,18): error C3861: create_default_params: идентификатор не найден
+  (компиляция исходного файла "/test.cpp")
+  
+C:\Users\adsim\for work and studing\projects\Nedler_Mid_Math_Tests\test.cpp(21,9): error C2065: params: необъявленный идентификатор
+  (компиляция исходного файла "/test.cpp")
+  
+C:\Users\adsim\for work and studing\projects\Nedler_Mid_Math_Tests\test.cpp(45,14): error C2065: params: необъявленный идентификатор
+  (компиляция исходного файла "/test.cpp")
+  
+C:\Users\adsim\for work and studing\projects\Nedler_Mid_Math_Tests\test.cpp(41,22): error C3861: nelder_mead_optimize: идентификатор не найден
+  (компиляция исходного файла "/test.cpp")
+  
